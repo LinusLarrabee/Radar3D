@@ -18,12 +18,11 @@ NoisePower=-12;%(dB);%噪声功率（目标为0dB）
 Fc = 30e6;
 
 %% 目标参数
-% 将每个目标按功率，距离，径向速度和角度提前写入同路径文件 test.txt 中
 Target = load ('test.txt');
 SigPower = Target(:,1)'; %目标功率,无量纲 [5,1,100,10.250000000000000]
 TargetDistance = Target(:,2)'; %目标距离,单位m  距离参数为[3000 8025 15800 8025]
 TargetVelocity = Target(:,3)'; %目标径向速度 单位m/s  速度参数为[50 0 10000 100]
-TargetAngle = Target(:,4)'; %目标角度 单位度 角度参数 [30 60 90 120]
+TargetAngle = round(Target(:,4))'; %目标角度 单位度 角度参数 [30 60 90 120]
 TargetWaveNum = length(SigPower);
 DelayNum = fix(Fs*2*TargetDistance/C);% 把目标距离换算成采样点（距离门） fix函数向0靠拢取整
 TargetFd = 2*TargetVelocity/Lambda;%计算目标多卜勒频移2v/λ
@@ -56,7 +55,7 @@ AngleNum = totalAngle/deltaAngle;
 Sector = startAngle + deltaAngle*(1:AngleNum);
 
 SampleNum=fix(Fs*PRT);%计算一个脉冲周期的采样点数；
-AngleCirNum = SAmpleNum*AngleNum; 
+AngleCirNum = SampleNum*AngleNum; 
 %先完成一个角度的一整个线性调频，再依次完成剩余39个角度，最后循环16次脉冲；
 TotalNum=SampleNum*PulseNum*AngleNum;%总的采样点数；
 BlindNum=fix(Fs*TimeWidth);%计算一个脉冲周期的盲区-遮挡样点数；
@@ -64,27 +63,29 @@ BlindNum=fix(Fs*TimeWidth);%计算一个脉冲周期的盲区-遮挡样点数；
 %% 产生目标回波串
 % 产生前3个目标的回波串
 SignalAll=zeros(1,TotalNum);%所有脉冲的信号,先填0
-
-for k=1:TargetWaveNum-1 % 依次产生各个目标
-    fi=pi/10 * fix(10*rand);
-    SignalTemp=zeros(1,SampleNum);% 一个PRT
-    SignalTemp(DelayNum(k)+1:DelayNum(k)+WaveNum)=...
-    sqrt(SigPower(k))*exp(1i*fi)*Chirp;
-    %一个脉冲的1个目标（未加多普勒速度）(DelayNum(k)+1):(DelayNum(k)+WaveNum)
-    Signal=zeros(1,TotalNum);
-    for i=1:PulseNum % 16个回波脉冲
-        Signal((i-1)*AngleCirNum+1:i*AngleCirNum)=SignalTemp;
-        %每个目标把16个SignalTemp排在一起
+for ang = 1:AngleNum
+    detect = find (TargetAngle == Sector(ang));
+    if ~isempty(detect)
+        for k = detect % 依次产生各个目标
+            fi=2*pi/10 * fix(10*rand);
+            SignalTemp=zeros(1,SampleNum);% 一个PRT
+            SignalTemp(DelayNum(k)+1:DelayNum(k)+WaveNum)=...
+                sqrt(SigPower(k))*exp(1i*fi)*Chirp;
+            %一个脉冲的1个目标（未加多普勒速度）(DelayNum(k)+1):(DelayNum(k)+WaveNum)
+            Signal = zeros(1,TotalNum);
+            SignalAng = zeros(1,AngleCirNum);
+            SignalAng((ang-1)*SampleNum+1:ang*SampleNum)=SignalTemp;
+            for i=1:PulseNum % 16个回波脉冲
+                Signal((i-1)*AngleCirNum+1:i*AngleCirNum)=SignalAng;
+                %每个目标把16个SignalTemp排在一起
+            end
+            FreqMove=exp(1i*2*pi*TargetFd(k)*(0:TotalNum-1)/Fs);
+            %目标的多普勒速度*时间=目标的多普勒相移
+            Signal=Signal.*FreqMove;%加上多普勒速度后的16个脉冲1个目标
+            SignalAll=SignalAll+Signal;%加上多普勒速度后的16个脉冲4个目标
+        end
     end
-    FreqMove=exp(1i*2*pi*TargetFd(k)*(0:TotalNum-1)/Fs);
-    %目标的多普勒速度*时间=目标的多普勒相移
-    Signal=Signal.*FreqMove;%加上多普勒速度后的16个脉冲1个目标
-    SignalAll=SignalAll+Signal;%加上多普勒速度后的16个脉冲4个目标
-
 end
-
-Signal=Signal.*FreqMove;
-SignalAll=SignalAll+Signal;
 
 figure(2);
 subplot(2,1,1);plot(real(SignalAll),'r-');title('目标信号的实部');...
@@ -97,8 +98,8 @@ SystemNoise=normrnd(0,10^(NoisePower/10),1,TotalNum)...
 %均值为0，标准差为10^(NoisePower/10)的噪声
 %% 总的回波信号
 Echo=SignalAll+SystemNoise;% +SeaClutter+TerraClutter，加噪声之后的回波
-for i=1:PulseNum   %在接收机闭锁期,接收的回波为0
-Echo((i-1)*SampleNum+1:(i-1)*SampleNum+WaveNum)=0; %发射时接收为0
+for i=1:PulseNum*AngleNum   %在接收机闭锁期,接收的回波为0
+    Echo((i-1)*SampleNum+1:(i-1)*SampleNum+WaveNum)=0; %发射时接收为0
 end
 figure(3);%加噪声之后的总回波信号
 subplot(2,1,1);plot(real(Echo),'r-');title('总回波信号的实部,闭锁期为0');
