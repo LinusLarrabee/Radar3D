@@ -1,5 +1,4 @@
 %% Initial and introduction of the process
-
 % Radar3D.m
 % Created by Group 6 on 5/8/19.
 close all; clear ; clc;
@@ -111,13 +110,14 @@ end
 %% 回波信号整形
 Folder = {'时域脉压','时频域脉压对比','频域脉压幅度','MTI','MTD'};
 for i = 1:length(Folder)
-    if ~exist(char(Folder(i)),'dir')
-        mkdir(char(Folder(i)))
+    if exist(char(Folder(i)),'dir')
+        rmdir(char(Folder(i)),'s')
     end
+    mkdir(char(Folder(i)))
 end
 
 EchoRoute = reshape(EchoAll, [SampleNum,AngleNum,PulseNum]);
-for argerich = 1 : AngleNum
+for argerich = 1 : AngleNum/20
     Echo = reshape(EchoRoute(:,argerich,:),1,[]);
     hugo = figure('visible','off');
     subplot(3,1,1)
