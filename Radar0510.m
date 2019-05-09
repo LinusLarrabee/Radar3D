@@ -109,17 +109,13 @@ end
 % subplot(2,1,2);plot(imag(EchoAll));title('总回波信号的虚部,闭锁期为0');
 
 %% 回波信号整形
-Folder = ['时域脉压','时频域脉压对比','频域脉压幅度','MTI','MTD'];
+Folder = {'时域脉压','时频域脉压对比','频域脉压幅度','MTI','MTD'};
 for i = 1:length(Folder)
-    if ~exist(Folder(i),'dir')
-        mkdir(Folder(i))
+    if ~exist(char(Folder(i)),'dir')
+        mkdir(char(Folder(i)))
     end
 end
-% mkdir('时域脉压');
-% mkdir('时频域脉压对比');
-% mkdir('频域脉压幅度');
-% mkdir('MTI');
-% mkdir('MTD');
+
 EchoRoute = reshape(EchoAll, [SampleNum,AngleNum,PulseNum]);
 for argerich = 1 : AngleNum
     Echo = reshape(EchoRoute(:,argerich,:),1,[]);
