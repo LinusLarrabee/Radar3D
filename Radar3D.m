@@ -87,11 +87,11 @@ for ang = 1:AngleNum
     end
 end
 
-figure(2);
-subplot(2,1,1);plot(real(SignalAll),'r-');title('目标信号的实部');...
-grid on;zoom on;
-subplot(2,1,2);plot(imag(SignalAll));title('目标信号的虚部');grid on;zoom on;
-
+% figure(2);
+% subplot(2,1,1);plot(real(SignalAll),'r-');title('目标信号的实部');...
+% grid on;zoom on;
+% subplot(2,1,2);plot(imag(SignalAll));title('目标信号的虚部');grid on;zoom on;
+% 
 
 %% 总的回波信号
 % 产生系统噪声信号
@@ -104,15 +104,15 @@ EchoAll=SignalAll+SystemNoise;% +SeaClutter+TerraClutter，加噪声之后的回
 for i=1:PulseNum*AngleNum   %在接收机闭锁期,接收的回波为0
     EchoAll((i-1)*SampleNum+1:(i-1)*SampleNum+WaveNum)=0; %发射时接收为0
 end
-figure(3);%加噪声之后的总回波信号
-subplot(2,1,1);plot(real(EchoAll),'r-');title('总回波信号的实部,闭锁期为0');
-subplot(2,1,2);plot(imag(EchoAll));title('总回波信号的虚部,闭锁期为0');
+% figure(3);%加噪声之后的总回波信号
+% subplot(2,1,1);plot(real(EchoAll),'r-');title('总回波信号的实部,闭锁期为0');
+% subplot(2,1,2);plot(imag(EchoAll));title('总回波信号的虚部,闭锁期为0');
 
 %% 回波信号整形
 EchoRoute = reshape(EchoAll, [SampleNum,AngleNum,PulseNum]);
-for i = 1 : 10
-    Echo = reshape(EchoRoute(:,i,:),1,[]);
-    figure(i+3)
+for argerich = 1 : 10
+    Echo = reshape(EchoRoute(:,argerich,:),1,[]);
+    figure(5*argerich-2)
     subplot(3,1,1)
     plot(real(Echo),'r-');title('总回波信号的实部,闭锁期为0');
     %% 时域脉压
@@ -123,84 +123,121 @@ for i = 1 : 10
     %pc_time0的模的曲线
     subplot(3,1,3);plot(abs(pc_time1));title('时域脉压结果的幅度,无暂态点');
     %pc_time1的模的曲线
-    
-end
-%% 时域脉压
-pc_time0=conv(Echo,coeff);%pc_time0为Echo和coeff的卷积
-pc_time1=pc_time0(WaveNum:length(Echo)+WaveNum-1);%去掉暂态点 WaveNum-1个
-figure(4);%时域脉压结果的幅度
-subplot(2,1,1);plot(abs(pc_time0),'r-');title('时域脉压结果的幅度,有暂态点');
-%pc_time0的模的曲线
-subplot(2,1,2);plot(abs(pc_time1));title('时域脉压结果的幅度,无暂态点');
-%pc_time1的模的曲线
-%% 频域脉压
-Echo_fft=fft(Echo,524288);
-%理应进行length(Echo)+WaveNum-1点FFT,但为了提高运算速度,进行了8192点的FFT
-coeff_fft=fft(coeff,524288);
-pc_fft=Echo_fft.*coeff_fft;
-pc_freq0=ifft(pc_fft);
-figure(5);
-subplot(2,1,1);plot(abs(pc_freq0(1:length(Echo)+WaveNum-1)));
-title('频域脉压结果的幅度,有前暂态点');
-subplot(2,1,2);
-plot(abs(pc_time0(1:length(Echo)+WaveNum-1)-...
-         pc_freq0(1:length(Echo)+WaveNum-1)),'r');
-title('时域和频域脉压的差别');
-pc_freq1=pc_freq0(WaveNum:length(Echo)+WaveNum-1);
-%去掉暂态点 WaveNum-1个,后填充点若干(8192-WaveNum+1-length(Echo))
-% ================按照脉冲号、距离门号重排数据=================================%
-for i=1:PulseNumber
-pc(i,1:SampleNumber)=pc_freq1((i-1)*SampleNumber+1:i*SampleNumber);
-%每个PRT为一行，每行480个采样点的数据
-end
-figure(6);
-plot(abs(pc(1,:)));title('频域脉压结果的幅度,没有暂态点');
+    %% 频域脉压
+    Echo_fft=fft(Echo,524288);
+    %理应进行length(Echo)+WaveNum-1点FFT,但为了提高运算速度,进行了8192点的FFT
+    coeff_fft=fft(coeff,524288);
+    pc_fft=Echo_fft.*coeff_fft;
+    pc_freq0=ifft(pc_fft);
+    figure(5*argerich-1);
+    subplot(2,1,1);plot(abs(pc_freq0(1:length(Echo)+WaveNum-1)));
+    title('频域脉压结果的幅度,有前暂态点');
+    subplot(2,1,2);
+    plot(abs(pc_time0(1:length(Echo)+WaveNum-1)-...
+            pc_freq0(1:length(Echo)+WaveNum-1)),'r');
+    title('时域和频域脉压的差别');
+    pc_freq1=pc_freq0(WaveNum:length(Echo)+WaveNum-1);
+    %去掉暂态点 WaveNum-1个,后填充点若干(8192-WaveNum+1-length(Echo))
+    % ================按照脉冲号、距离门号重排数据=================================%
+    for i=1:PulseNum
+        pc(i,1:SampleNum)=pc_freq1((i-1)*SampleNum+1:i*SampleNum);
+        %每个PRT为一行，每行480个采样点的数据
+    end
+    figure(5*argerich);
+    plot(abs(pc(1,:)));title('频域脉压结果的幅度,没有暂态点');
 
-% ================MTI（动目标显示）,对消静止目标和低速目标---可抑制杂波%
-for i=1:PulseNumber-1  %滑动对消，少了一个脉冲
-mti(i,:)=pc(i+1,:)-pc(i,:);
-end
-figure(7);
-mesh(abs(mti));title('MTI  result');
+    % ================MTI（动目标显示）,对消静止目标和低速目标---可抑制杂波%
+    for i=1:PulseNum-1  %滑动对消，少了一个脉冲
+        mti(i,:)=pc(i+1,:)-pc(i,:);
+    end
+    figure(5*argerich+1);
+    mesh(abs(mti));title('MTI  result');
 
-% ================MTD（动目标检测）,区分不同速度的目标，有测速作用==%
-mtd=zeros(PulseNumber,SampleNumber);
-for i=1:SampleNumber
-buff(1:PulseNumber)=pc(1:PulseNumber,i);
-buff_fft=fft(buff);
-mtd(1:PulseNumber,i)=buff_fft(1:PulseNumber);
+    % ================MTD（动目标检测）,区分不同速度的目标，有测速作用==%
+    mtd=zeros(PulseNum,SampleNum);
+    for i=1:SampleNum
+        buff(1:PulseNum)=pc(1:PulseNum,i);
+        buff_fft=fft(buff);
+        mtd(1:PulseNum,i)=buff_fft(1:PulseNum);
+    end
+    figure(5*argerich+2);mesh(abs(mtd));title('MTD  result');
 end
-figure(8);mesh(abs(mtd));title('MTD  result');
-
-%% 虚实矩阵转换
-
-coeff_fft_c=zeros(1,2*524288);
-for i=1:8192
-coeff_fft_c(2*i-1)=real(coeff_fft(i));
-coeff_fft_c(2*i)=imag(coeff_fft(i));
-end
-echo_c=zeros(1,2*length(Echo));
-for i=1:length(Echo)
-echo_c(2*i-1)=real(Echo(i));
-echo_c(2*i)=imag(Echo(i));
-end
-%% 以下是为DSP程序提供回波数据、脉压系数
-[fo,message] = fopen('/Users/sunhao/Desktop/Project0.1/coeff_fft_c.dat'...
-                     ,'wt');%频域脉压系数
-if fo < 0
-error('Failed to open coeff_fft_c.dat becauese: %s',message);
-end
-for i=1:2*8192
-fprintf(fo,'%f,\r\n',coeff_fft_c(i));
-end
-fclose(fo);
-
-[fo,message]=fopen('/Users/sunhao/Desktop/Project0.1/echo_c.dat'...
-                   ,'wt');%16次回波的
-if fo < 0
-error('Failed to open echo_c.dat becauese: %s',message);
-end
-for i=1:2*length(Echo)
-fprintf(fo,'%f,\r\n',echo_c(i));
-end
-fclose(fo);
+% %% 时域脉压
+% pc_time0=conv(Echo,coeff);%pc_time0为Echo和coeff的卷积
+% pc_time1=pc_time0(WaveNum:length(Echo)+WaveNum-1);%去掉暂态点 WaveNum-1个
+% figure(4);%时域脉压结果的幅度
+% subplot(2,1,1);plot(abs(pc_time0),'r-');title('时域脉压结果的幅度,有暂态点');
+% %pc_time0的模的曲线
+% subplot(2,1,2);plot(abs(pc_time1));title('时域脉压结果的幅度,无暂态点');
+% %pc_time1的模的曲线
+% %% 频域脉压
+% Echo_fft=fft(Echo,524288);
+% %理应进行length(Echo)+WaveNum-1点FFT,但为了提高运算速度,进行了8192点的FFT
+% coeff_fft=fft(coeff,524288);
+% pc_fft=Echo_fft.*coeff_fft;
+% pc_freq0=ifft(pc_fft);
+% figure(5);
+% subplot(2,1,1);plot(abs(pc_freq0(1:length(Echo)+WaveNum-1)));
+% title('频域脉压结果的幅度,有前暂态点');
+% subplot(2,1,2);
+% plot(abs(pc_time0(1:length(Echo)+WaveNum-1)-...
+%          pc_freq0(1:length(Echo)+WaveNum-1)),'r');
+% title('时域和频域脉压的差别');
+% pc_freq1=pc_freq0(WaveNum:length(Echo)+WaveNum-1);
+% %去掉暂态点 WaveNum-1个,后填充点若干(8192-WaveNum+1-length(Echo))
+% % ================按照脉冲号、距离门号重排数据=================================%
+% for i=1:PulseNum
+% pc(i,1:SampleNum)=pc_freq1((i-1)*SampleNum+1:i*SampleNum);
+% %每个PRT为一行，每行480个采样点的数据
+% end
+% figure(6);
+% plot(abs(pc(1,:)));title('频域脉压结果的幅度,没有暂态点');
+% 
+% % ================MTI（动目标显示）,对消静止目标和低速目标---可抑制杂波%
+% for i=1:PulseNum-1  %滑动对消，少了一个脉冲
+% mti(i,:)=pc(i+1,:)-pc(i,:);
+% end
+% figure(7);
+% mesh(abs(mti));title('MTI  result');
+% 
+% % ================MTD（动目标检测）,区分不同速度的目标，有测速作用==%
+% mtd=zeros(PulseNum,SampleNum);
+% for i=1:SampleNum
+% buff(1:PulseNum)=pc(1:PulseNum,i);
+% buff_fft=fft(buff);
+% mtd(1:PulseNum,i)=buff_fft(1:PulseNum);
+% end
+% figure(8);mesh(abs(mtd));title('MTD  result');
+% 
+% %% 虚实矩阵转换
+% 
+% coeff_fft_c=zeros(1,2*524288);
+% for i=1:8192
+% coeff_fft_c(2*i-1)=real(coeff_fft(i));
+% coeff_fft_c(2*i)=imag(coeff_fft(i));
+% end
+% echo_c=zeros(1,2*length(Echo));
+% for i=1:length(Echo)
+% echo_c(2*i-1)=real(Echo(i));
+% echo_c(2*i)=imag(Echo(i));
+% end
+% %% 以下是为DSP程序提供回波数据、脉压系数
+% [fo,message] = fopen('/Users/sunhao/Desktop/Project0.1/coeff_fft_c.dat'...
+%                      ,'wt');%频域脉压系数
+% if fo < 0
+% error('Failed to open coeff_fft_c.dat becauese: %s',message);
+% end
+% for i=1:2*8192
+% fprintf(fo,'%f,\r\n',coeff_fft_c(i));
+% end
+% fclose(fo);
+% 
+% [fo,message]=fopen('/Users/sunhao/Desktop/Project0.1/echo_c.dat'...
+%                    ,'wt');%16次回波的
+% if fo < 0
+% error('Failed to open echo_c.dat becauese: %s',message);
+% end
+% for i=1:2*length(Echo)
+% fprintf(fo,'%f,\r\n',echo_c(i));
+% end
+% fclose(fo);
