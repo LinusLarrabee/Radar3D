@@ -1,0 +1,131 @@
+function [ row,target_V, target_D ] = DSP (Echo,coeff,M)
+    C=3.0e8;  %光速(m/s)
+    f0=30e9;  %雷达射频
+    BandWidth=4.0e9;  %发射信号带宽 带宽B=1/τ，τ是脉冲宽度
+    PulseNumber=16;   %回波脉冲数 
+    PRT=8e-7;   % 雷达发射脉冲重复周期(s),240us对应1/2*240*300=36000米最大无模糊距离
+    Pf0=1/PRT;
+    fs=2.5e10;  %采样频率
+    Lambda=C/f0;    %雷达工作波长
+    SampleNumber=fix(fs*PRT);
+    
+    Echo_number=PulseNumber*PRT*fs;
+    n=0:Echo_number-1;
+    local_oscillator_i=cos(n*f0/fs*pi);%I路本振信号
+    local_oscillator_q=cos(n*f0/fs*pi);%Q路本振信号
+    s_echo_i=local_oscillator_i.* Echo;%I路解调
+    s_echo_q=local_oscillator_q.* Echo;%Q路解调
+    window=chebwin(51,40);%这是采50阶cheby窗的FIR低通滤波器
+    [b,a]=fir1(50,2*BandWidth/fs,window);
+    s_echo_i=[s_echo_i,zeros(1,25)];
+    s_echo_q=[s_echo_q,zeros(1,25)];
+    s_echo_i=filter(b,a,s_echo_i);
+    s_echo_q=filter(b,a,s_echo_q);
+    s_echo_i=s_echo_i(26:end);%截取有效信息
+    s_echo_q=s_echo_q(26:end);%截取有效信息
+    s_echo_mf=s_echo_i+j*s_echo_q;
+%     figure(4)
+%     subplot(2,1,1),plot((0:1/fs:PulseNumber*PRT-1/fs),s_echo_i);
+%     xlabel('t(unit:s)'); title('雷达回波信号解调后的I路信号');
+% 
+%     subplot(2,1,2),plot((0:1/fs:PulseNumber*PRT-1/fs),s_echo_q);
+%     xlabel('t(unit:s)'); title('雷达回波信号解调后的q路信号');
+
+    %====================================================================================%
+    %                      对已经正交解调的回波信号脉冲压缩                               %
+    %====================================================================================%
+    coeff_fft=fft(coeff,M);
+    for i=1:PulseNumber
+         s_echo_fft_result=fft(s_echo_mf(1,(i-1)*PRT*fs+1:i*PRT*fs),M);
+         s_pc_fft=s_echo_fft_result.*coeff_fft;
+         s_pc_result(i,:)=ifft(s_pc_fft,M);    
+    end
+
+%     figure(6);
+%     plot(abs(s_pc_result(1,:)));%一个周期内三峰值点理论上为40 107 304
+
+    s_pc_result_1=s_pc_result;
+    s_pc_result_1=reshape((s_pc_result_1)',1,PulseNumber*M);   %%%%%%%%%%注意，这里由于reshape函数的算法，需要将矩阵转置才能首尾连在一起
+%     figure(5),subplot(2,1,1),plot((0:1/fs:PulseNumber*M/fs-1/fs),abs(s_pc_result_1)),
+%     %N_echo_frame*T_frame-ts
+%     xlabel('t(单位:s)'),title('脉冲压缩处理后结果（实部）');
+%     subplot(2,1,2),plot((0:1/fs:PulseNumber*M/fs-1/fs),imag(s_pc_result_1)),
+%     xlabel('t(单位:s)'),title('脉冲压缩处理后结果（虚部）');
+
+    %====================================================================================%
+    %                      MTI                                                           %
+    %====================================================================================%
+
+    for i=1:PulseNumber-1  %滑动对消，少了一个脉冲
+       mti(i,:)=s_pc_result(i+1,:)-s_pc_result(i,:);
+    end
+    %figure(7);
+    %mesh(abs(mti));title('MTI  result');
+
+
+
+    %====================================================================================%
+    %                      MTD                                                           %
+    %====================================================================================%
+    % mtd=zeros(PulseNumber,SampleNumber);
+    % for i=1:SampleNumber
+    %    buff(1:(PulseNumber))= s_pc_resultmt(1:PulseNumber,i);
+    %    buff_fft=fftshift(fft(buff)); %用fftshift将零频搬移到中间 这样可以方便观察速度正负
+    %    mtd(1:PulseNumber,i)=buff_fft(1:PulseNumber)';
+    % end
+    % x=0:1:SampleNumber-1;
+    % y=-8:1:7;%通道这样设后读出的通道数乘单位值则是速度值。
+    % figure(8);mesh(x,y,abs(mtd));title('MTD  result');
+    mtd_PulseNumber = PulseNumber-1;
+    mtd=zeros(PulseNumber,SampleNumber);
+    for i=1:SampleNumber
+       buff(1:(mtd_PulseNumber))= mti(1:(mtd_PulseNumber),i);
+       buff_fft=fftshift(fft(buff)); %用fftshift将零频搬移到中间 这样可以方便观察速度正负
+       mtd(1:mtd_PulseNumber,i)=buff_fft(1:mtd_PulseNumber)';
+    end
+    x=0:1:SampleNumber-1;
+    y=-7:1:8;%通道这样设后读出的通道数乘单位值则是速度值。
+    %figure(8);mesh(x,y,abs(mtd));title('MTD  result');
+
+    %====================================================================================%
+    %                      找到多普勒——距离地图中峰值最高的目标                          %
+    %====================================================================================%
+
+    abs_mtd = abs(mtd); %对正交分量的复数求模
+    max_target = max(max(abs_mtd));
+    [row,cell] = find( abs_mtd == max_target);
+    target_D = cell/fs*C/2;
+    target_V = ((abs(row - 8))/PulseNumber)*Pf0*Lambda/2;
+
+    %====================================================================================%
+    %                      二维恒虚警                                                    %
+    %====================================================================================%
+    ex_PulseNumber = mtd_PulseNumber+4;
+    ex_SampleNumber = SampleNumber+4;
+    ex_mtd = zeros(ex_PulseNumber ,ex_SampleNumber);
+    cfar_mtd = zeros(ex_PulseNumber ,ex_SampleNumber);
+    T = 1.0;     %恒虚警CFAR 阈值因子
+
+    for i = 3:(ex_PulseNumber-2)
+        for ji = 3:(ex_SampleNumber-2)
+
+              ex_mtd(i,ji) = abs_mtd(i-2,ji-2); %构建长宽每边都扩张两格的矩阵供恒虚警窗口检测
+
+        end
+    end
+
+    for i = 3:(ex_PulseNumber-2)
+        for ji = 3:(ex_SampleNumber-2)    %从有目标的窗口中进行检测
+            cfar_sx = ex_mtd(i-2,ji-2) + ex_mtd(i-2,ji-1) +ex_mtd(i-1,ji-2) +ex_mtd(i,ji-2)+ex_mtd(i+1,ji-2)+ex_mtd(i+2,ji-2) + ex_mtd(i+2,ji-1);                   
+            cfar_sy = ex_mtd(i-2,ji+1) + ex_mtd(i-2,ji+2) +ex_mtd(i-1,ji+2) +ex_mtd(i,ji+2)+ex_mtd(i+1,ji+2)+ex_mtd(i+2,ji+1) + ex_mtd(i+2,ji+2);
+            cfar_s = T*min(cfar_sx, cfar_sy);      %使用GO—CFAR二维恒虚警，
+            if (ex_mtd(i,ji)>= cfar_s)
+                cfar_mtd(i,ji) = ex_mtd(i,ji);
+            end
+        end
+    end
+    x=0:1:ex_SampleNumber-1;
+    y=-9:1:9;%通道这样设后读出的通道数乘单位值则是速度值。
+    %figure(9);mesh(x,y,abs(cfar_mtd));title('cfar  result');  
+end
+
