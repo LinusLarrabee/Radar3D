@@ -194,38 +194,38 @@ for i = 1:length(Folder)
     mkdir(char(Folder(i)))
 end
 %% 回波信号整形
-EchoRoute = reshape(EchoAll, [SampleNum,AngleNum,PulseNum]);
+EchoRoute = reshape(RealEchoAll, [SampleNum,AngleNum,PulseNum]);
 %将EchoAll改为RealEchoAll即为实信号
 target_D = zeros(1,AngleNum);
 target_V = zeros(1,AngleNum);
 target_row = zeros(1,AngleNum);
 for argerich = 1 : 40
     Echo = reshape(EchoRoute(:,argerich,:),1,[]);
-%     %% 实信号接收调制
-% 
-%     EchoNum=SampleNum*PulseNum;
-%     n=0:EchoNum-1;
-%     receiver_oscillator_i=cos(n*Fc/Fs*pi);%I路本振信号
-%     receiver_oscillator_q=cos(n*Fc/Fs*pi);%Q路本振信号
-%     s_echo_i=receiver_oscillator_i.* Echo;%I路解调
-%     s_echo_q=receiver_oscillator_q.* Echo;%Q路解调
-%     receiverwindow=chebwin(51,40);%这是采50阶cheby窗的FIR低通滤波器
-%     [Rb,Ra]=fir1(50,2*BandWidth/Fs,receiverwindow);
-%     s_echo_i=[s_echo_i,zeros(1,25)];
-%     s_echo_q=[s_echo_q,zeros(1,25)];
-%     s_echo_i=filter(Rb,Ra,s_echo_i);
-%     s_echo_q=filter(Rb,Ra,s_echo_q);
-%     s_echo_i=s_echo_i(26:end);%截取有效信息
-%     s_echo_q=s_echo_q(26:end);%截取有效信息
-%     Echo=s_echo_i+1i*s_echo_q;
-%     hug_1 = figure('visible','off');
-%     subplot(2,1,1),plot((0:1/Fs:PulseNum*PRT-1/Fs),s_echo_i);
-%     xlabel('t(unit:s)'); title('雷达回波信号解调后的I路信号');
-%     subplot(2,1,2),plot((0:1/Fs:PulseNum*PRT-1/Fs),s_echo_q);
-%     xlabel('t(unit:s)'); title('雷达回波信号解调后的q路信号');
-%     filename=['ReceiverIQ/扫描' num2str(Sector(argerich)) '度.png'];
-%     saveas(hug_1,filename)
-%     close(gcf)
+    %% 实信号接收调制
+
+    EchoNum=SampleNum*PulseNum;
+    n=0:EchoNum-1;
+    receiver_oscillator_i=cos(n*Fc/Fs*pi);%I路本振信号
+    receiver_oscillator_q=cos(n*Fc/Fs*pi);%Q路本振信号
+    s_echo_i=receiver_oscillator_i.* Echo;%I路解调
+    s_echo_q=receiver_oscillator_q.* Echo;%Q路解调
+    receiverwindow=chebwin(51,40);%这是采50阶cheby窗的FIR低通滤波器
+    [Rb,Ra]=fir1(50,2*BandWidth/Fs,receiverwindow);
+    s_echo_i=[s_echo_i,zeros(1,25)];
+    s_echo_q=[s_echo_q,zeros(1,25)];
+    s_echo_i=filter(Rb,Ra,s_echo_i);
+    s_echo_q=filter(Rb,Ra,s_echo_q);
+    s_echo_i=s_echo_i(26:end);%截取有效信息
+    s_echo_q=s_echo_q(26:end);%截取有效信息
+    Echo=s_echo_i+1i*s_echo_q;
+    hug_1 = figure('visible','off');
+    subplot(2,1,1),plot((0:1/Fs:PulseNum*PRT-1/Fs),s_echo_i);
+    xlabel('t(unit:s)'); title('雷达回波信号解调后的I路信号');
+    subplot(2,1,2),plot((0:1/Fs:PulseNum*PRT-1/Fs),s_echo_q);
+    xlabel('t(unit:s)'); title('雷达回波信号解调后的q路信号');
+    filename=['ReceiverIQ/扫描' num2str(Sector(argerich)) '度.png'];
+    saveas(hug_1,filename)
+    close(gcf)
     %% 时域脉压
     
     hugo = figure('visible','off');
@@ -298,4 +298,7 @@ for argerich = 1 : 40
     target_row(argerich) = row; 
     target_D(argerich) = cell/Fs*C/2;
     target_V(argerich) = ((abs(row - 8))/PulseNum)*PRF*(Lambda/2);
-end  
+end
+%% hmmm
+result_tar = [target_D',target_V',target_row'];
+csvwrite('result.csv',result_tar)
