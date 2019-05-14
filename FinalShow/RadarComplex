@@ -57,6 +57,32 @@ subplot(2,1,1);
 plot((0:Fs/WaveNum:Fs-Fs/WaveNum),abs(fftR));
 subplot(2,1,2);
 plot((0:Fs/WaveNum:Fs/2-Fs/WaveNum),abs(fftR(1:WaveNum/2)));
+
+%% 码内正交解调  
+LocalIQNum = 0:fix(WaveNum)-1;
+M = 131126;     %131126点fft
+local_oscillator_i=cos(LocalIQNum*Fc/Fs*2*pi);%i路本振信号
+local_oscillator_q=sin(LocalIQNum*Fc/Fs*2*pi);%q路本振信号
+fbb_i=local_oscillator_i.*RealChirp;%i路解调   先进行一个码元的求解脉冲压缩系数
+fbb_q=local_oscillator_q.*RealChirp;%q路解调
+window=chebwin(51,40); %切比雪夫窗函数
+[b,a]=fir1(50,2*BandWidth/Fs,window); %b a 分别是经滤波器定义的分子分母系数向量
+fbb_i=[fbb_i,zeros(1,25)];  %因为该FIR滤波器又25个采样周期的延迟，为了保证所有的有效信息全部通过滤波器，因此在信号后面扩展了25个0
+fbb_q=[fbb_q,zeros(1,25)];
+fbb_i=filter(b,a,fbb_i);   %I 路 Q路信号经过低通滤波器
+fbb_q=filter(b,a,fbb_q);
+fbb_i=fbb_i(26:end);%截取有效信息
+fbb_q=fbb_q(26:end);%截取有效信息  
+fbb=fbb_i+1i*fbb_q;
+fbb_fft_result = fft(fbb);
+
+figure(3);subplot(2,1,1),plot(fbb_i);
+xlabel('t(单位：秒)');title('雷达发射信号码内解调后I路信号');
+subplot(2,1,2),plot(fbb_q);
+xlabel('t(单位：秒)');title('雷达发射信号码内解调后Q路信号');
+figure(4)
+plot((0:Fs/WaveNum:Fs/2-Fs/WaveNum),abs(fbb_fft_result(1:WaveNum/2)));
+xlabel('频率f(单位 Hz)');title('雷达发射信号码内解调信号的频谱');
 %% 相关参数计算
 totalAngle = 120;
 startAngle = 30;
@@ -98,7 +124,7 @@ for ang = 1:AngleNum
     end
 end
 
-figure(3);
+figure(5);
 subplot(2,1,1);plot(real(SignalAll),'r-');title('目标信号的实部');...
 grid on;zoom on;
 subplot(2,1,2);plot(imag(SignalAll));title('目标信号的虚部');grid on;zoom on;
@@ -115,12 +141,52 @@ EchoAll=SignalAll+SystemNoise;% +SeaClutter+TerraClutter，加噪声之后的回
 for i=1:PulseNum*AngleNum   %在接收机闭锁期,接收的回波为0
     EchoAll((i-1)*SampleNum+1:(i-1)*SampleNum+WaveNum)=0; %发射时接收为0
 end
-figure(4);%加噪声之后的总回波信号
+figure(6);%加噪声之后的总回波信号
 subplot(2,1,1);plot(real(EchoAll),'r-');title('总回波信号的实部,闭锁期为0');
 subplot(2,1,2);plot(imag(EchoAll));title('总回波信号的虚部,闭锁期为0');
 
+%% 实信号回波生成
+RealSignalAll=zeros(1,TotalNum);%所有脉冲的信号,先填0
+for ang = 1:AngleNum
+    detect = find (TargetAngle == Sector(ang));
+    if ~isempty(detect)
+        for k = detect % 依次产生各个目标
+            fi=2*pi/10 * fix(10*rand);
+            RealSignalTemp=zeros(1,SampleNum);% 一个PRT
+            RealSignalTemp(DelayNum(k)+1:DelayNum(k)+WaveNum)=...
+                sqrt(SigPower(k))*cos(fi)*RealChirp;
+            %一个脉冲的1个目标（未加多普勒速度）(DelayNum(k)+1):(DelayNum(k)+WaveNum)
+            RealSignal = zeros(1,TotalNum);
+            RealSignalAng = zeros(1,AngleCirNum);
+            RealSignalAng((ang-1)*SampleNum+1:ang*SampleNum)=RealSignalTemp;
+            for i=1:PulseNum % 16个回波脉冲
+                RealSignal((i-1)*AngleCirNum+1:i*AngleCirNum)=RealSignalAng;
+                %每个目标把16个RealSignalTemp排在一起
+            end
+            RealFreqMove=cos(2*pi*TargetFd(k)*(0:TotalNum-1)/Fs);
+            %目标的多普勒速度*时间=目标的多普勒相移
+            RealSignal=RealSignal.*RealFreqMove;%加上多普勒速度后的16个脉冲1个目标
+            RealSignalAll=RealSignalAll+RealSignal;%加上多普勒速度后的16个脉冲4个目标
+        end
+    end
+end
+
+figure(7);plot(RealSignalAll,'r-');title('实信号回波');
+grid on;zoom on;
+
+% 产生系统噪声信号
+RealSystemNoise = normrnd(0,10^(NoisePower/10),1,TotalNum);
+%均值为0，标准差为10^(NoisePower/10)的噪声
+
+%闭锁期无回波
+RealEchoAll=RealSignalAll+RealSystemNoise;% +SeaClutter+TerraClutter，加噪声之后的回波
+for i=1:PulseNum*AngleNum   %在接收机闭锁期,接收的回波为0
+    RealEchoAll((i-1)*SampleNum+1:(i-1)*SampleNum+WaveNum)=0; %发射时接收为0
+end
+figure(8);%加噪声之后的总回波信号
+plot(RealEchoAll,'r-');title('带杂波的实信号回波,闭锁期为0');
 %% 文件写入
-Folder = {'单角度回波信号','时域脉压','时频域脉压对比','频域脉压幅度','MTI','MTD','cfar'};
+Folder = {'ReceiverIQ','时域脉压','时频域脉压对比','频域脉压幅度','MTI','MTD','cfar'};
 for i = 1:length(Folder)
     if exist(char(Folder(i)),'dir')
         rmdir(char(Folder(i)),'s')
@@ -129,15 +195,42 @@ for i = 1:length(Folder)
 end
 %% 回波信号整形
 EchoRoute = reshape(EchoAll, [SampleNum,AngleNum,PulseNum]);
+%将EchoAll改为RealEchoAll即为实信号
 target_D = zeros(1,AngleNum);
 target_V = zeros(1,AngleNum);
-
-for argerich = 1 : 10
+target_row = zeros(1,AngleNum);
+for argerich = 1 : 40
     Echo = reshape(EchoRoute(:,argerich,:),1,[]);
+%     %% 实信号接收调制
+% 
+%     EchoNum=SampleNum*PulseNum;
+%     n=0:EchoNum-1;
+%     receiver_oscillator_i=cos(n*Fc/Fs*pi);%I路本振信号
+%     receiver_oscillator_q=cos(n*Fc/Fs*pi);%Q路本振信号
+%     s_echo_i=receiver_oscillator_i.* Echo;%I路解调
+%     s_echo_q=receiver_oscillator_q.* Echo;%Q路解调
+%     receiverwindow=chebwin(51,40);%这是采50阶cheby窗的FIR低通滤波器
+%     [Rb,Ra]=fir1(50,2*BandWidth/Fs,receiverwindow);
+%     s_echo_i=[s_echo_i,zeros(1,25)];
+%     s_echo_q=[s_echo_q,zeros(1,25)];
+%     s_echo_i=filter(Rb,Ra,s_echo_i);
+%     s_echo_q=filter(Rb,Ra,s_echo_q);
+%     s_echo_i=s_echo_i(26:end);%截取有效信息
+%     s_echo_q=s_echo_q(26:end);%截取有效信息
+%     Echo=s_echo_i+1i*s_echo_q;
+%     hug_1 = figure('visible','off');
+%     subplot(2,1,1),plot((0:1/Fs:PulseNum*PRT-1/Fs),s_echo_i);
+%     xlabel('t(unit:s)'); title('雷达回波信号解调后的I路信号');
+%     subplot(2,1,2),plot((0:1/Fs:PulseNum*PRT-1/Fs),s_echo_q);
+%     xlabel('t(unit:s)'); title('雷达回波信号解调后的q路信号');
+%     filename=['ReceiverIQ/扫描' num2str(Sector(argerich)) '度.png'];
+%     saveas(hug_1,filename)
+%     close(gcf)
+    %% 时域脉压
+    
     hugo = figure('visible','off');
     subplot(3,1,1)
     plot(real(Echo),'r-');title('总回波信号的实部,闭锁期为0');
-    %% 时域脉压
     pc_time0=conv(Echo,coeff);%pc_time0为Echo和coeff的卷积
     pc_time1=pc_time0(WaveNum:length(Echo)+WaveNum-1);%去掉暂态点 WaveNum-1个
     %figure(4);%时域脉压结果的幅度
@@ -202,6 +295,7 @@ for argerich = 1 : 10
     abs_mtd = abs(mtd); %对正交分量的复数求模
     max_target = max(max(abs_mtd));
     [row,cell] = find( abs_mtd == max_target);
+    target_row(argerich) = row; 
     target_D(argerich) = cell/Fs*C/2;
     target_V(argerich) = ((abs(row - 8))/PulseNum)*PRF*(Lambda/2);
-end 
+end  
