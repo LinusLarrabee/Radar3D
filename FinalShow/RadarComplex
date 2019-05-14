@@ -300,5 +300,10 @@ for argerich = 1 : 40
     target_V(argerich) = ((abs(row - 8))/PulseNum)*PRF*(Lambda/2);
 end
 %% hmmm
-result_tar = [target_D',target_V',target_row'];
+result_tar = [target_D',target_V',target_row',Sector'];
+figure(9)
+polarscatter(deg2rad(result_tar(:,4)),result_tar(:,1),'filled')
+thetalim([30 150])
+hold on
+polarscatter(deg2rad(result_tar(:,4)),TargetDistance','filled')
 csvwrite('result.csv',result_tar)
