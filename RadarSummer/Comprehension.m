@@ -206,7 +206,7 @@ function uitable1_CreateFcn(hObject, eventdata, handles)
 % load('newData.mat');
 % set(handles.uitable1,'Data',newData);
 Data = xlsread('Cars.xlsx');
-set(hObject, 'ColumnName', {'信号强度','车距','车速','方向角'}, 'data',Data) %将数据设置到uitable控件中
+set(hObject, 'ColumnName', {'车型','车道','车速','车道位置'}, 'data',Data) %将数据设置到uitable控件中
 newData = Data;
 save('cars.mat','newData');
 
@@ -216,10 +216,10 @@ save('cars.mat','newData');
 function NewRow_Callback(hObject, eventdata, handles)
 
 %点击 增加后弹出 对话框
-prompt ={'信号强度（建议1-10）','车距（0-200）','车速（0-50）','方向角（30-120）'}; %对话框内容提示
+prompt ={'车型（建议1-10）','车道（-4～4）非0','车速（0-50）','车道位置（30-120）'}; %对话框内容提示
 title = '请输入数据';    %对话框标题
 lines = [1,1,1,1]; %设置输入框行数
-def = { '5','100','5','33'}; %默认值
+def = { '1','3','5','30'}; %默认值
 tab = inputdlg(prompt,title,lines,def);  %对话框设置
 for i = 1 : length(tab)
     newArray(i) = str2num(tab{i}); %对话框第二行内容
